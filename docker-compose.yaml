@@ -1,0 +1,61 @@
+version: "3.9"
+
+services:
+  elasticsearch:
+    image: elasticsearch:8.6.1
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g
+      - xpack.security.enabled=false
+    networks:
+      - service
+    volumes:
+      - ./db_data:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+  zookeeper:
+    image: 'bitnami/zookeeper:latest'
+    container_name: zookeeper
+    ports:
+      - '2181:2181'
+    networks:
+      - service
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+  kafka:
+    image: 'bitnami/kafka:latest'
+    container_name: kafka
+    ports:
+      - '9092:9092'
+    environment:
+      - KAFKA_BROKER_ID=1
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
+      - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181
+      - ALLOW_PLAINTEXT_LISTENER=yes
+    networks:
+      - service
+    depends_on:
+      - zookeeper
+  email-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: email-service
+    ports:
+      - "8080:8080"
+    env_file:
+      - envir.env
+    environment:
+      - spring.kafka.bootstrap-servers=kafka:9092
+      - elasticsearch.address=elasticsearch:9200
+    depends_on:
+      - elasticsearch
+      - kafka
+    networks:
+      - service
+networks:
+  service:
+    name: service-network
+    driver: bridge
